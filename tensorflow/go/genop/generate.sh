@@ -16,8 +16,8 @@
 
 set -e
 
-go get github.com/golang/protobuf/proto
-go get github.com/golang/protobuf/protoc-gen-go
+#go get github.com/golang/protobuf/proto
+#go get github.com/golang/protobuf/protoc-gen-go
 
 if [ -z "${GOPATH}" ]
 then
@@ -25,34 +25,34 @@ then
 fi
 
 cd $(dirname $0)
-for g in $(echo "${GOPATH//:/ }"); do
-    TF_DIR="${g}/src/github.com/tensorflow/tensorflow"
-    PROTOC="${TF_DIR}/bazel-out/host/bin/external/protobuf/protoc"
-    if [ -x "${PROTOC}" ]; then
-        break
-    fi
-done
-
-if [ ! -x "${PROTOC}" ]
-then
-  set +e
-  PATH_PROTOC=$(which protoc)
-  if [ ! -x "${PATH_PROTOC}" ]
-  then
-    echo "Protocol buffer compiler protoc not found in PATH or in ${PROTOC}"
-    echo "Perhaps build it using:"
-    echo "bazel build --config opt @com_google_protobuf//:protoc"
-    exit 1
-  fi
-  PROTOC=$PATH_PROTOC
-  set -e
-fi
-
-# Ensure that protoc-gen-go is available in $PATH
-# Since ${PROTOC} will require it.
-export PATH=$PATH:${GOPATH}/bin
-mkdir -p ./internal/proto
-${PROTOC} \
-  -I ${TF_DIR} \
-  --go_out=./internal/proto \
-  ${TF_DIR}/tensorflow/core/framework/*.proto
+#for g in $(echo "${GOPATH//:/ }"); do
+#    TF_DIR="${g}/src/github.com/tensorflow/tensorflow"
+#    PROTOC="${TF_DIR}/bazel-out/host/bin/external/protobuf/protoc"
+#    if [ -x "${PROTOC}" ]; then
+#        break
+#    fi
+#done
+#
+#if [ ! -x "${PROTOC}" ]
+#then
+#  set +e
+#  PATH_PROTOC=$(which protoc)
+#  if [ ! -x "${PATH_PROTOC}" ]
+#  then
+#    echo "Protocol buffer compiler protoc not found in PATH or in ${PROTOC}"
+#    echo "Perhaps build it using:"
+#    echo "bazel build --config opt @com_google_protobuf//:protoc"
+#    exit 1
+#  fi
+#  PROTOC=$PATH_PROTOC
+#  set -e
+#fi
+#
+## Ensure that protoc-gen-go is available in $PATH
+## Since ${PROTOC} will require it.
+#export PATH=$PATH:${GOPATH}/bin
+#mkdir -p ./internal/proto
+#${PROTOC} \
+#  -I ${TF_DIR} \
+#  --go_out=./internal/proto \
+#  ${TF_DIR}/tensorflow/core/framework/*.proto
