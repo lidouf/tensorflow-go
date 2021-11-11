@@ -10290,6 +10290,10 @@ func DecodeProtoV2Sanitize(value bool) DecodeProtoV2Attr {
 
 // The op extracts fields from a serialized protocol buffers message into tensors.
 //
+// Note: This API is designed for orthogonality rather than human-friendliness. It
+// can be used to parse input protos by hand, but it is intended for use in
+// generated code.
+//
 // The `decode_proto` op extracts fields from a serialized protocol buffers
 // message into tensors.  The fields in `field_names` are decoded and converted
 // to the corresponding `output_types` if possible.
@@ -10320,6 +10324,14 @@ func DecodeProtoV2Sanitize(value bool) DecodeProtoV2Attr {
 // way). Unsigned int32 values can be represented exactly by specifying type
 // `DT_INT64`, or using twos-complement if the caller specifies `DT_INT32` in
 // the `output_types` attribute.
+//
+// - `map` fields are not directly decoded. They are treated as `repeated` fields,
+// of the appropriate entry type. The proto-compiler defines entry types for each
+// map field. The type-name is the field name, converted to "CamelCase" with
+// "Entry" appended. The `tf.train.Features.FeatureEntry` message is an example of
+// one of these implicit `Entry` types.
+//
+// - `enum` fields should be read as int32.
 //
 // Both binary and text proto serializations are supported, and can be
 // chosen using the `format` attribute.
@@ -16544,48 +16556,6 @@ func TensorListScatter(scope *Scope, tensor tf.Output, indices tf.Output, elemen
 	return op.Output(0)
 }
 
-// Computes the gradient of the sigmoid of `x` wrt its input.
-//
-// Specifically, `grad = dy * y * (1 - y)`, where `y = sigmoid(x)`, and
-// `dy` is the corresponding input gradient.
-func SigmoidGrad(scope *Scope, y tf.Output, dy tf.Output) (z tf.Output) {
-	if scope.Err() != nil {
-		return
-	}
-	opspec := tf.OpSpec{
-		Type: "SigmoidGrad",
-		Input: []tf.Input{
-			y, dy,
-		},
-	}
-	op := scope.AddOperation(opspec)
-	return op.Output(0)
-}
-
-// Creates a Tensor by indexing into the TensorList.
-//
-// Each row in the produced Tensor corresponds to the element in the TensorList
-// specified by the given index (see `tf.gather`).
-//
-// input_handle: The input tensor list.
-// indices: The indices used to index into the list.
-// values: The tensor.
-func TensorListGather(scope *Scope, input_handle tf.Output, indices tf.Output, element_shape tf.Output, element_dtype tf.DataType) (values tf.Output) {
-	if scope.Err() != nil {
-		return
-	}
-	attrs := map[string]interface{}{"element_dtype": element_dtype}
-	opspec := tf.OpSpec{
-		Type: "TensorListGather",
-		Input: []tf.Input{
-			input_handle, indices, element_shape,
-		},
-		Attrs: attrs,
-	}
-	op := scope.AddOperation(opspec)
-	return op.Output(0)
-}
-
 // The shape of the elements of the given list, as a tensor.
 //
 //   input_handle: the list
@@ -17307,6 +17277,83 @@ func SqrtGrad(scope *Scope, y tf.Output, dy tf.Output) (z tf.Output) {
 	return op.Output(0)
 }
 
+// AnonymousMutableDenseHashTableAttr is an optional argument to AnonymousMutableDenseHashTable.
+type AnonymousMutableDenseHashTableAttr func(optionalAttr)
+
+// AnonymousMutableDenseHashTableValueShape sets the optional value_shape attribute to value.
+//
+// value: The shape of each value.
+// If not specified, defaults to {}
+func AnonymousMutableDenseHashTableValueShape(value tf.Shape) AnonymousMutableDenseHashTableAttr {
+	return func(m optionalAttr) {
+		m["value_shape"] = value
+	}
+}
+
+// AnonymousMutableDenseHashTableInitialNumBuckets sets the optional initial_num_buckets attribute to value.
+//
+// value: The initial number of hash table buckets. Must be a power
+// to 2.
+// If not specified, defaults to 131072
+func AnonymousMutableDenseHashTableInitialNumBuckets(value int64) AnonymousMutableDenseHashTableAttr {
+	return func(m optionalAttr) {
+		m["initial_num_buckets"] = value
+	}
+}
+
+// AnonymousMutableDenseHashTableMaxLoadFactor sets the optional max_load_factor attribute to value.
+//
+// value: The maximum ratio between number of entries and number of
+// buckets before growing the table. Must be between 0 and 1.
+// If not specified, defaults to 0.8
+func AnonymousMutableDenseHashTableMaxLoadFactor(value float32) AnonymousMutableDenseHashTableAttr {
+	return func(m optionalAttr) {
+		m["max_load_factor"] = value
+	}
+}
+
+// Creates an empty anonymous mutable hash table that uses tensors as the backing store.
+//
+// This op creates a new anonymous mutable hash table (as a resource) everytime
+// it is executed, with the specified dtype of its keys and values,
+// returning the resource handle. Each value must be a scalar.
+// Data can be inserted into the table using
+// the insert operations. It does not support the initialization operation.
+//
+// It uses "open addressing" with quadratic reprobing to resolve
+// collisions.
+//
+// The table is anonymous in the sense that it can only be
+// accessed by the returned resource handle (e.g. it cannot be looked up
+// by a name in a resource manager). The table will be automatically
+// deleted when all resource handles pointing to it are gone.
+//
+// Arguments:
+//	empty_key: The key used to represent empty key buckets internally. Must not
+// be used in insert or lookup operations.
+//
+//	value_dtype: Type of the table values.
+//
+// Returns The resource handle to the newly created hash-table resource.
+func AnonymousMutableDenseHashTable(scope *Scope, empty_key tf.Output, deleted_key tf.Output, value_dtype tf.DataType, optional ...AnonymousMutableDenseHashTableAttr) (table_handle tf.Output) {
+	if scope.Err() != nil {
+		return
+	}
+	attrs := map[string]interface{}{"value_dtype": value_dtype}
+	for _, a := range optional {
+		a(attrs)
+	}
+	opspec := tf.OpSpec{
+		Type: "AnonymousMutableDenseHashTable",
+		Input: []tf.Input{
+			empty_key, deleted_key,
+		},
+		Attrs: attrs,
+	}
+	op := scope.AddOperation(opspec)
+	return op.Output(0)
+}
+
 // MutableHashTableOfTensorsV2Attr is an optional argument to MutableHashTableOfTensorsV2.
 type MutableHashTableOfTensorsV2Attr func(optionalAttr)
 
@@ -17466,6 +17513,37 @@ func IsotonicRegression(scope *Scope, input tf.Output, optional ...IsotonicRegre
 	}
 	op := scope.AddOperation(opspec)
 	return op.Output(0), op.Output(1)
+}
+
+// Creates an empty anonymous mutable hash table.
+//
+// This op creates a new anonymous mutable hash table (as a resource) everytime
+// it is executed, with the specified dtype of its keys and values,
+// returning the resource handle. Each value must be a scalar.
+// Data can be inserted into the table using
+// the insert operations. It does not support the initialization operation.
+// The table is anonymous in the sense that it can only be
+// accessed by the returned resource handle (e.g. it cannot be looked up
+// by a name in a resource manager). The table will be automatically
+// deleted when all resource handles pointing to it are gone.
+//
+// Arguments:
+//	key_dtype: Type of the table keys.
+//	value_dtype: Type of the table values.
+//
+// Returns The resource handle to the newly created hash-table resource.
+func AnonymousMutableHashTable(scope *Scope, key_dtype tf.DataType, value_dtype tf.DataType) (table_handle tf.Output) {
+	if scope.Err() != nil {
+		return
+	}
+	attrs := map[string]interface{}{"key_dtype": key_dtype, "value_dtype": value_dtype}
+	opspec := tf.OpSpec{
+		Type: "AnonymousMutableHashTable",
+
+		Attrs: attrs,
+	}
+	op := scope.AddOperation(opspec)
+	return op.Output(0)
 }
 
 // MutableHashTableV2Attr is an optional argument to MutableHashTableV2.
@@ -20059,8 +20137,7 @@ func ResourceScatterNdSub(scope *Scope, ref tf.Output, indices tf.Output, update
 // [the section on segmentation](https://tensorflow.org/api_docs/python/tf/math#Segmentation)
 // for an explanation of segments.
 //
-// This operator is similar to the unsorted segment sum operator found
-// [(here)](../../../api_docs/python/math_ops.md#UnsortedSegmentSum).
+// This operator is similar to `tf.math.unsorted_segment_sum`,
 // Instead of computing the sum over segments, it computes the minimum such that:
 //
 // \\(output_i = \min_{j...} data_[j...]\\) where min is over tuples `j...` such
@@ -21892,6 +21969,48 @@ func Acos(scope *Scope, x tf.Output) (y tf.Output) {
 	return op.Output(0)
 }
 
+// Creates a Tensor by indexing into the TensorList.
+//
+// Each row in the produced Tensor corresponds to the element in the TensorList
+// specified by the given index (see `tf.gather`).
+//
+// input_handle: The input tensor list.
+// indices: The indices used to index into the list.
+// values: The tensor.
+func TensorListGather(scope *Scope, input_handle tf.Output, indices tf.Output, element_shape tf.Output, element_dtype tf.DataType) (values tf.Output) {
+	if scope.Err() != nil {
+		return
+	}
+	attrs := map[string]interface{}{"element_dtype": element_dtype}
+	opspec := tf.OpSpec{
+		Type: "TensorListGather",
+		Input: []tf.Input{
+			input_handle, indices, element_shape,
+		},
+		Attrs: attrs,
+	}
+	op := scope.AddOperation(opspec)
+	return op.Output(0)
+}
+
+// Computes the gradient of the sigmoid of `x` wrt its input.
+//
+// Specifically, `grad = dy * y * (1 - y)`, where `y = sigmoid(x)`, and
+// `dy` is the corresponding input gradient.
+func SigmoidGrad(scope *Scope, y tf.Output, dy tf.Output) (z tf.Output) {
+	if scope.Err() != nil {
+		return
+	}
+	opspec := tf.OpSpec{
+		Type: "SigmoidGrad",
+		Input: []tf.Input{
+			y, dy,
+		},
+	}
+	op := scope.AddOperation(opspec)
+	return op.Output(0)
+}
+
 // ResourceSparseApplyAdadeltaAttr is an optional argument to ResourceSparseApplyAdadelta.
 type ResourceSparseApplyAdadeltaAttr func(optionalAttr)
 
@@ -22935,7 +23054,7 @@ func ResourceApplyAdamWithAmsgrad(scope *Scope, var_ tf.Output, m tf.Output, v t
 //
 // ```
 // c = tf.constant([[1,2,3,4], [4, 3, 2, 1], [5,6,7,8]])
-// tf.segment_sum(c, tf.constant([0, 0, 1]))
+// tf.math.segment_sum(c, tf.constant([0, 0, 1]))
 // # ==> [[5, 5, 5, 5],
 // #      [5, 6, 7, 8]]
 // ```
@@ -32366,6 +32485,17 @@ func DataFormatDimMap(scope *Scope, x tf.Output, optional ...DataFormatDimMapAtt
 	return op.Output(0)
 }
 
+// AssignVariableOpAttr is an optional argument to AssignVariableOp.
+type AssignVariableOpAttr func(optionalAttr)
+
+// AssignVariableOpValidateShape sets the optional validate_shape attribute to value.
+// If not specified, defaults to false
+func AssignVariableOpValidateShape(value bool) AssignVariableOpAttr {
+	return func(m optionalAttr) {
+		m["validate_shape"] = value
+	}
+}
+
 // Assigns a new value to a variable.
 //
 // Any ReadVariableOp with a control dependency on this op is guaranteed to return
@@ -32376,15 +32506,20 @@ func DataFormatDimMap(scope *Scope, x tf.Output, optional ...DataFormatDimMapAtt
 //	value: the value to set the new tensor to use.
 //
 // Returns the created operation.
-func AssignVariableOp(scope *Scope, resource tf.Output, value tf.Output) (o *tf.Operation) {
+func AssignVariableOp(scope *Scope, resource tf.Output, value tf.Output, optional ...AssignVariableOpAttr) (o *tf.Operation) {
 	if scope.Err() != nil {
 		return
+	}
+	attrs := map[string]interface{}{}
+	for _, a := range optional {
+		a(attrs)
 	}
 	opspec := tf.OpSpec{
 		Type: "AssignVariableOp",
 		Input: []tf.Input{
 			resource, value,
 		},
+		Attrs: attrs,
 	}
 	return scope.AddOperation(opspec)
 }
@@ -36020,8 +36155,7 @@ func RngSkip(scope *Scope, resource tf.Output, algorithm tf.Output, delta tf.Out
 // [the section on segmentation](https://tensorflow.org/api_docs/python/tf/math#Segmentation)
 // for an explanation of segments.
 //
-// This operator is similar to the unsorted segment sum operator found
-// [(here)](../../../api_docs/python/math_ops.md#UnsortedSegmentSum).
+// This operator is similar to `tf.math.unsorted_segment_sum`,
 // Instead of computing the sum over segments, it computes the maximum such that:
 //
 // \\(output_i = \max_{j...} data[j...]\\) where max is over tuples `j...` such
@@ -38645,8 +38779,7 @@ func SparseTensorToCSRSparseMatrix(scope *Scope, indices tf.Output, values tf.Ou
 // [the section on segmentation](https://tensorflow.org/api_docs/python/tf/math#Segmentation)
 // for an explanation of segments.
 //
-// This operator is similar to the unsorted segment sum operator found
-// [(here)](../../../api_docs/python/math_ops.md#UnsortedSegmentSum).
+// This operator is similar to `tf.math.unsorted_segment_sum`,
 // Instead of computing the sum over segments, it computes the product of all
 // entries belonging to a segment such that:
 //
@@ -45542,6 +45675,51 @@ func ResourceApplyFtrlV2(scope *Scope, var_ tf.Output, accum tf.Output, linear t
 		Attrs: attrs,
 	}
 	return scope.AddOperation(opspec)
+}
+
+// AnonymousMutableHashTableOfTensorsAttr is an optional argument to AnonymousMutableHashTableOfTensors.
+type AnonymousMutableHashTableOfTensorsAttr func(optionalAttr)
+
+// AnonymousMutableHashTableOfTensorsValueShape sets the optional value_shape attribute to value.
+// If not specified, defaults to {}
+func AnonymousMutableHashTableOfTensorsValueShape(value tf.Shape) AnonymousMutableHashTableOfTensorsAttr {
+	return func(m optionalAttr) {
+		m["value_shape"] = value
+	}
+}
+
+// Creates an empty anonymous mutable hash table of vector values.
+//
+// This op creates a new anonymous mutable hash table (as a resource) everytime
+// it is executed, with the specified dtype of its keys and values,
+// returning the resource handle. Each value must be a vector.
+// Data can be inserted into the table using
+// the insert operations. It does not support the initialization operation.
+// The table is anonymous in the sense that it can only be
+// accessed by the returned resource handle (e.g. it cannot be looked up
+// by a name in a resource manager). The table will be automatically
+// deleted when all resource handles pointing to it are gone.
+//
+// Arguments:
+//	key_dtype: Type of the table keys.
+//	value_dtype: Type of the table values.
+//
+// Returns The resource handle to the newly created hash-table resource.
+func AnonymousMutableHashTableOfTensors(scope *Scope, key_dtype tf.DataType, value_dtype tf.DataType, optional ...AnonymousMutableHashTableOfTensorsAttr) (table_handle tf.Output) {
+	if scope.Err() != nil {
+		return
+	}
+	attrs := map[string]interface{}{"key_dtype": key_dtype, "value_dtype": value_dtype}
+	for _, a := range optional {
+		a(attrs)
+	}
+	opspec := tf.OpSpec{
+		Type: "AnonymousMutableHashTableOfTensors",
+
+		Attrs: attrs,
+	}
+	op := scope.AddOperation(opspec)
+	return op.Output(0)
 }
 
 // TensorArrayConcatV2Attr is an optional argument to TensorArrayConcatV2.
