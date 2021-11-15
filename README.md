@@ -10,7 +10,7 @@ I added `go.mod` in the repo and auto-generated pb file so that you can use it d
 ## Install
 If you're using go module, just use the `replace` instruction like this:
 ```
-replace github.com/tensorflow/tensorflow v2.7 => github.com/lidouf/tensorflow-go v2.7
+replace github.com/tensorflow/tensorflow git-commit-id => github.com/lidouf/tensorflow-go git-commit-id
 ```
 
 ## License
